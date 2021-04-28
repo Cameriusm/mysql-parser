@@ -7,7 +7,7 @@ const cheerio = require('cheerio');
 app.use(cors());
 app.use(express.json());
 
-function checkCategories(categories) {
+function checkCategories(categories, additional) {
   const url = [];
   if (categories.includes('News'))
     url.push('https://www.emkafashion.ru/catalog/new/filter/odezda-is-ubki/');
@@ -33,27 +33,28 @@ function checkCategories(categories) {
     url.push('https://www.emkafashion.ru/catalog/remni_optom/');
   if (categories.includes('Shoes'))
     url.push('https://www.emkafashion.ru/catalog/obuv/');
+  if (additional) url.push(additional);
   return url;
 }
 
 app.post('/api/post', (req, res) => {
   const categories = req.body.categories;
-  const urls = checkCategories(categories);
-  console.log(urls);
+  const urls = checkCategories(categories, req.body.additional);
   const resUrl = urls.map((url) => {
     return axios(url)
       .then((response) => {
         const html = response.data;
         const $ = cheerio.load(html);
-        const links = $('.sm_name_stickers a[href]');
+        const links = $('.catalog-item__slider__wrapper.swiper-wrapper');
         const parsedLinks = [];
         links.each(function () {
-          const href = $(this).attr('href');
+          const href = $(this).find('a').attr('href');
           parsedLinks.push({
             href,
           });
         });
 
+        // console.log(parsedLinks);
         return parsedLinks;
       })
       .catch(console.error);
@@ -65,29 +66,45 @@ app.post('/api/post', (req, res) => {
         .then((response) => {
           const html = response.data;
           const $ = cheerio.load(html);
-          const links = $('.cat-det.js--fix-head');
+          const links = $('.page-content');
           const parsedLinks = [];
+          const descList = [];
           links.each(function () {
-            const articul = $(this).find('.cat-det-articul').text();
+            const articul = $(this).find('h1').text();
             const img = $(this)
-              .find(
-                '.cat-det-images-slider__item.swiper-slide.swiper-slide-active.swiper-slide-duplicate-next.swiper-slide-duplicate-prev'
-              )
+              .find('.cat-det-prev-images-slider__item')
+              .first()
               .find('img')
               .attr('src');
             const name = $(this).find('.cat-det-name').text();
             const description = $(this).find('.cat-det-descr').text();
-            const descList = $(this)
-              .find('.cat-det-descr-list')
+            const category = $(this)
+              .find('.breadcrumbs__item')
+
               .text()
-              .trim()
-              .replace(/\s\s+/g, ' ');
+              .split('Emkafashion')[1];
+            // let descList = $(this)
+            //   .find('.cat-det-descr-list')
+            //   .text()
+            //   .trim()
+            //   .replace(/\s\s+/g, ' ');
+
+            var descList = [];
+            $(this)
+              .find('.cat-det-descr-list__item')
+              .each(function (index, element) {
+                descList.push($(element).text());
+              });
+            descList.pop();
+            // descItems
+            // descList = descList.split('См Капсулы:')[0];
             parsedLinks.push({
               articul,
               name,
               description,
               descList,
               img,
+              category,
             });
           });
 
